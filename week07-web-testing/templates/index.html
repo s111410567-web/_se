@@ -1,0 +1,234 @@
+
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>大學課程管理系統</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f6f9;
+            margin: 0;
+            padding: 30px;
+        }
+
+        .container {
+            max-width: 850px;
+            margin: auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 3px 12px #ddd;
+        }
+
+        h1, h2 {
+            color: #243b53;
+        }
+
+        input, button {
+            padding: 10px;
+            margin: 5px;
+            border-radius: 5px;
+        }
+
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        .course {
+            padding: 15px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        #message {
+            margin-top: 15px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>大學課程管理系統</h1>
+
+    <div id="loginSection">
+        <h2>學生登入</h2>
+        <input id="username" placeholder="學生帳號">
+        <input id="password" type="password"
+               placeholder="密碼">
+        <button onclick="login()">登入</button>
+    </div>
+
+    <div id="courseSection" class="hidden">
+        <h2>課程列表</h2>
+        <div id="courseList"></div>
+
+        <h2>我的選課</h2>
+        <div id="selectedCourses"></div>
+
+        <button onclick="logout()">登出</button>
+    </div>
+
+    <p id="message" role="status"></p>
+</div>
+
+<script>
+    let currentUser = "";
+
+    async function login() {
+        const username =
+            document.getElementById("username").value;
+        const password =
+            document.getElementById("password").value;
+
+        const response = await fetch("/api/login", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({username, password})
+        });
+
+        const data = await response.json();
+        showMessage(data.message);
+
+        if (data.success) {
+            currentUser = username;
+
+            document.getElementById("loginSection")
+                .classList.add("hidden");
+
+            document.getElementById("courseSection")
+                .classList.remove("hidden");
+
+            await loadCourses();
+            await loadSelectedCourses();
+        }
+    }
+
+    async function loadCourses() {
+        const response = await fetch("/api/courses");
+        const courses = await response.json();
+
+        const list = document.getElementById("courseList");
+        list.innerHTML = "";
+
+        courses.forEach(course => {
+            const div = document.createElement("div");
+            div.className = "course";
+
+            const label = document.createElement("span");
+            label.textContent =
+                `${course.name}（${course.credits} 學分）`;
+
+            const button = document.createElement("button");
+            button.textContent = "選課";
+            button.addEventListener("click", () => {
+                enroll(course.id);
+            });
+
+            div.append(label, button);
+            list.appendChild(div);
+        });
+    }
+
+    async function enroll(courseId) {
+        const response = await fetch("/api/enroll", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                username: currentUser,
+                course_id: courseId
+            })
+        });
+
+        const data = await response.json();
+        showMessage(data.message);
+        await loadSelectedCourses();
+    }
+
+    async function loadSelectedCourses() {
+        const response = await fetch(
+            `/api/enrollments/${encodeURIComponent(currentUser)}`
+        );
+
+        const courses = await response.json();
+        const list =
+            document.getElementById("selectedCourses");
+
+        list.innerHTML = "";
+
+        if (courses.length === 0) {
+            list.textContent = "目前尚未選課";
+            return;
+        }
+
+        courses.forEach(course => {
+            const div = document.createElement("div");
+            div.className = "course";
+
+            const label = document.createElement("span");
+            label.textContent = course.name;
+
+            const button = document.createElement("button");
+            button.textContent = "退選";
+            button.addEventListener("click", () => {
+                dropCourse(course.id);
+            });
+
+            div.append(label, button);
+            list.appendChild(div);
+        });
+    }
+
+    async function dropCourse(courseId) {
+        const response = await fetch("/api/drop", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                username: currentUser,
+                course_id: courseId
+            })
+        });
+
+        const data = await response.json();
+        showMessage(data.message);
+        await loadSelectedCourses();
+    }
+
+    function logout() {
+        currentUser = "";
+
+        document.getElementById("courseSection")
+            .classList.add("hidden");
+
+        document.getElementById("loginSection")
+            .classList.remove("hidden");
+
+        document.getElementById("password").value = "";
+        showMessage("已登出");
+    }
+
+    function showMessage(message) {
+        document.getElementById("message").textContent = message;
+    }
+</script>
+
+</body>
+</html>

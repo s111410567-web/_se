@@ -1,0 +1,14 @@
+
+{
+  "name": "week07-web-testing",
+  "version": "1.0.0",
+  "private": true,
+  "description": "大學課程管理系統 - 第七週網站測試作業",
+  "scripts": {
+    "test:e2e": "playwright test tests/e2e.spec.js --headed=false",
+    "test:e2e:report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.0"
+  }
+}
