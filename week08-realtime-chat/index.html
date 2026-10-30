@@ -1,0 +1,336 @@
+
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+    <title>即時聊天與社群平台</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app">
+
+    <!-- 左側伺服器欄 -->
+    <aside class="server-sidebar">
+        <div class="server-icon" title="首頁">💬</div>
+        <div class="server-icon" title="程式交流">💻</div>
+        <div class="server-icon" title="遊戲社群">🎮</div>
+        <div class="server-icon" title="新增社群">+</div>
+    </aside>
+
+    <!-- 頻道列表 -->
+    <aside class="channel-sidebar">
+        <div class="server-title">
+            我的聊天社群
+        </div>
+
+        <div class="channel-title">文字頻道</div>
+
+        <div class="channel active" data-channel="general">
+            # 一般聊天
+        </div>
+
+        <div class="channel" data-channel="programming">
+            # 程式討論
+        </div>
+
+        <div class="channel" data-channel="gaming">
+            # 遊戲交流
+        </div>
+        
+<!-- 好友管理區域 -->
+ 
+<!-- =====================================
+     群組管理區域
+===================================== -->
+
+<!-- =====================================
+     通知中心
+===================================== -->
+
+<div class="channel-title">
+    🔔 通知中心
+    <span id="notificationBadge"
+          style="color: #ff7777; margin-left: 5px;">
+        0
+    </span>
+</div>
+
+<div class="notifications-panel"
+     style="padding: 10px;">
+
+    <button
+        type="button"
+        id="markAllNotificationsButton"
+        style="width: 100%; padding: 8px; cursor: pointer;"
+    >
+        ✓ 全部標記已讀
+    </button>
+
+    <button
+        type="button"
+        id="clearNotificationsButton"
+        style="width: 100%; padding: 8px; margin-top: 6px; cursor: pointer;"
+    >
+        清空通知
+    </button>
+
+    <div
+        id="notificationsList"
+        style="margin-top: 10px; font-size: 12px;"
+    >
+        目前沒有通知
+    </div>
+
+</div>
+
+<div class="channel-title">群組管理</div>
+
+<div class="groups-panel" style="padding: 10px;">
+
+    <!-- 建立群組 -->
+    <input
+        type="text"
+        id="groupNameInput"
+        placeholder="輸入新群組名稱"
+        maxlength="30"
+        style="width: 100%; padding: 8px; margin-bottom: 8px;"
+    >
+
+    <button
+        type="button"
+        id="createGroupButton"
+        style="width: 100%; padding: 8px; cursor: pointer;"
+    >
+        ＋ 建立群組
+    </button>
+
+    <!-- 操作結果 -->
+    <div
+        id="groupMessage"
+        role="status"
+        style="font-size: 12px; margin-top: 8px;"
+    ></div>
+
+    <!-- 已加入的群組 -->
+    <div class="channel-title" style="margin-top: 15px;">
+        我的群組
+    </div>
+
+    <div id="groupsList">
+        <div style="font-size: 12px; color: #949ba4;">
+            目前沒有群組
+        </div>
+    </div>
+
+    <!-- 邀請好友加入群組 -->
+    <div
+        id="groupInvitePanel"
+        style="display: none; margin-top: 15px;"
+    >
+        <div class="channel-title">
+            群組成員管理
+        </div>
+
+        <div
+            id="groupMembersList"
+            style="font-size: 12px; margin-bottom: 10px;"
+        ></div>
+
+        <select
+            id="groupFriendSelect"
+            style="width: 100%; padding: 8px; margin-bottom: 8px;"
+        >
+            <option value="">選擇要邀請的好友</option>
+        </select>
+
+        <button
+            type="button"
+            id="inviteGroupFriendButton"
+            style="width: 100%; padding: 8px; cursor: pointer;"
+        >
+            邀請好友加入
+        </button>
+
+        <button
+            type="button"
+            id="leaveGroupButton"
+            style="width: 100%; padding: 8px; margin-top: 8px; cursor: pointer;"
+        >
+            離開／解散群組
+        </button>
+    </div>
+
+</div>
+
+<div class="channel-title">好友管理</div>
+
+<div class="friends-panel" style="padding: 10px;">
+
+    <!-- 搜尋會員 -->
+    <input
+        type="text"
+        id="friendSearchInput"
+        placeholder="輸入會員帳號"
+        style="width: 100%; padding: 8px; margin-bottom: 8px;"
+    >
+
+    <!-- 發送好友邀請 -->
+    <button
+        type="button"
+        id="addFriendButton"
+        style="width: 100%; padding: 8px; cursor: pointer;"
+    >
+        ＋ 新增好友
+    </button>
+
+    <!-- 操作結果 -->
+    <div
+        id="friendMessage"
+        role="status"
+        style="font-size: 12px; margin-top: 8px;"
+    ></div>
+
+    <!-- 好友邀請 -->
+    <div class="channel-title" style="margin-top: 15px;">
+        收到的好友邀請
+    </div>
+
+    <div id="friendRequestsList">
+        <div style="font-size: 12px; color: #949ba4;">
+            目前沒有好友邀請
+        </div>
+    </div>
+
+    <!-- 好友列表 -->
+    <div class="channel-title" style="margin-top: 15px;">
+        我的好友
+    </div>
+
+    <div id="friendsList">
+        <div style="font-size: 12px; color: #949ba4;">
+            目前沒有好友
+        </div>
+    </div>
+
+</div>
+
+
+        <div class="channel-title">私人訊息</div>
+
+        <div class="channel" data-channel="friend1">
+            👤 小明
+        </div>
+
+        <div class="channel" data-channel="friend2">
+            👤 小華
+        </div>
+
+        <!-- 使用者資訊 -->
+        <div class="user-panel">
+            <div class="avatar">我</div>
+            <div>
+                <strong>測試使用者</strong>
+                <div style="font-size:12px;color:#949ba4;">
+                    🟢 在線上
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- 中間聊天區 -->
+    <main class="chat-container">
+
+        <header class="chat-header" id="chatTitle">
+            # 一般聊天
+        </header>
+
+        <section class="messages" id="messages">
+
+            <div class="message">
+                <div class="avatar">小</div>
+
+                <div class="message-content">
+                    <div class="message-author">
+                        小明
+                        <span class="message-time">09:30</span>
+                    </div>
+
+                    <div class="message-text">
+                        大家早安！歡迎來到聊天平台。
+                    </div>
+                </div>
+            </div>
+
+            <div class="message">
+                <div class="avatar">華</div>
+
+                <div class="message-content">
+                    <div class="message-author">
+                        小華
+                        <span class="message-time">09:35</span>
+                    </div>
+
+                    <div class="message-text">
+                        今天有人想一起討論程式設計嗎？
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- 訊息輸入區 -->
+        <form class="message-input-area" id="messageForm">
+            <input
+                type="text"
+                class="message-input"
+                id="messageInput"
+                placeholder="輸入訊息..."
+                autocomplete="off"
+            >
+
+            <button type="submit" class="send-button">
+                傳送
+            </button>
+        </form>
+
+    </main>
+
+    <!-- 右側成員列表 -->
+    <aside class="member-sidebar">
+        <div class="member-title">
+            線上成員 — 3
+        </div>
+
+        <div class="member">
+            <div class="avatar">我</div>
+            <span>測試使用者</span>
+            <div class="online-dot"></div>
+        </div>
+
+        <div class="member">
+            <div class="avatar">小</div>
+            <span>小明</span>
+            <div class="online-dot"></div>
+        </div>
+
+        <div class="member">
+            <div class="avatar">華</div>
+            <span>小華</span>
+            <div class="online-dot"></div>
+        </div>
+    </aside>
+
+</div>
+
+<script src="friends.js"></script>
+<script src="private-chat.js"></script>
+<script src="groups.js"></script>
+<script src="read-status.js"></script>
+<script src="notifications.js"></script>
+<script src="script.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,316 @@
+
+/* 全域設定 */
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #313338;
+    color: #f2f3f5;
+}
+
+/* 主畫面 */
+.app {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* 左側伺服器欄 */
+.server-sidebar {
+    width: 72px;
+    background: #1e1f22;
+    padding: 15px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+}
+
+.server-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: #5865f2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.server-icon:hover {
+    border-radius: 15px;
+    background: #4752c4;
+}
+
+/* 頻道列表 */
+.channel-sidebar {
+    width: 240px;
+    background: #2b2d31;
+    display: flex;
+    flex-direction: column;
+}
+
+.server-title {
+    padding: 20px;
+    font-size: 18px;
+    font-weight: bold;
+    border-bottom: 1px solid #232428;
+}
+
+.channel-title {
+    padding: 20px 15px 10px;
+    font-size: 13px;
+    color: #949ba4;
+}
+
+.channel {
+    margin: 3px 10px;
+    padding: 12px;
+    border-radius: 5px;
+    cursor: pointer;
+    color: #949ba4;
+}
+
+.channel:hover,
+.channel.active {
+    background: #404249;
+    color: white;
+}
+
+/* 使用者資料 */
+.user-panel {
+    margin-top: auto;
+    padding: 15px;
+    background: #232428;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: #23a559;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+}
+
+/* 聊天主區域 */
+.chat-container {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.chat-header {
+    height: 60px;
+    padding: 18px 25px;
+    border-bottom: 1px solid #26272b;
+    font-weight: bold;
+    font-size: 18px;
+}
+
+.messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 25px;
+}
+
+.message {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 22px;
+}
+
+.message-content {
+    flex: 1;
+}
+
+.message-author {
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.message-time {
+    color: #949ba4;
+    font-size: 12px;
+    margin-left: 10px;
+}
+
+.message-text {
+    line-height: 1.6;
+    color: #dbdee1;
+    overflow-wrap: anywhere;
+}
+
+/* 訊息輸入 */
+.message-input-area {
+    padding: 15px 25px 25px;
+    display: flex;
+    gap: 10px;
+}
+
+.message-input {
+    flex: 1;
+    min-width: 0;
+    padding: 15px;
+    border: none;
+    border-radius: 8px;
+    background: #383a40;
+    color: white;
+    font-size: 15px;
+    outline: none;
+}
+
+.send-button {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    background: #5865f2;
+    color: white;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.send-button:hover {
+    background: #4752c4;
+}
+
+/* 右側成員列表 */
+.member-sidebar {
+    width: 220px;
+    background: #2b2d31;
+    padding: 20px 15px;
+}
+
+.member-title {
+    color: #949ba4;
+    font-size: 13px;
+    margin-bottom: 20px;
+}
+
+.member {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.online-dot {
+    width: 10px;
+    height: 10px;
+    background: #23a559;
+    border-radius: 50%;
+}
+
+/* 小螢幕適應 */
+@media (max-width: 900px) {
+    .member-sidebar {
+        display: none;
+    }
+}
+
+@media (max-width: 600px) {
+    .channel-sidebar {
+        width: 150px;
+    }
+
+    .server-sidebar {
+        width: 55px;
+    }
+
+    .message-input-area {
+        padding: 10px;
+    }
+}
+
+/* 讓左側頻道、好友與群組管理區域可以上下捲動 */
+.channel-sidebar {
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
+}
+
+/* 美化左側捲軸 */
+.channel-sidebar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.channel-sidebar::-webkit-scrollbar-thumb {
+    background-color: #555;
+    border-radius: 10px;
+}
+
+.channel-sidebar::-webkit-scrollbar-track {
+    background-color: #2b2d31;
+}
+
+/* =====================================
+   介面美化：通知中心與群組管理
+===================================== */
+
+/* 左側欄位中的操作按鈕 */
+.channel-sidebar button {
+    background-color: #404249;
+    color: #f2f3f5;
+    border: none;
+    border-radius: 6px;
+    padding: 10px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+/* 滑鼠移到按鈕上 */
+.channel-sidebar button:hover {
+    background-color: #5865f2;
+}
+
+/* 左側輸入框與選單 */
+.channel-sidebar input,
+.channel-sidebar select {
+    background-color: #1e1f22;
+    color: #f2f3f5;
+    border: 1px solid #404249;
+    border-radius: 6px;
+    padding: 10px;
+}
+
+/* 輸入框被選取時 */
+.channel-sidebar input:focus,
+.channel-sidebar select:focus {
+    outline: none;
+    border-color: #5865f2;
+}
+
+/* 通知中心 */
+.notifications-panel {
+    background-color: #2b2d31;
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+
+/* 通知列表 */
+#notificationsList {
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+/* 群組列表 */
+#groupsList {
+    margin-top: 10px;
+}
+
+/* 左側區塊標題 */
+.channel-sidebar .channel-title {
+    margin-top: 12px;
+    margin-bottom: 10px;
+}
