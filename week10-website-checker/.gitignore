@@ -1,0 +1,25 @@
+
+# Python 快取
+__pycache__/
+*.pyc
+*.pyo
+
+# Python 虛擬環境
+.venv/
+venv/
+env/
+
+# 套件打包產物
+build/
+dist/
+*.egg-info/
+
+# 測試與工具快取
+.pytest_cache/
+.coverage
+.mypy_cache/
+
+# 編輯器與系統暫存
+.vscode/
+.DS_Store
+Thumbs.db

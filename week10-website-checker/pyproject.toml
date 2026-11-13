@@ -1,0 +1,22 @@
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "website-status-checker-demo"
+version = "0.1.0"
+description = "A simple Python website status checker"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+authors = [
+    {name = "Student Developer"}
+]
+keywords = ["website", "status", "http", "checker"]
+
+[project.scripts]
+website-checker = "website_checker:main"
+
+[tool.setuptools]
+py-modules = ["website_checker"]
