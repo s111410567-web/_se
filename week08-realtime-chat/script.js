@@ -41,7 +41,7 @@ function initializeChat() {
     const inviteGroupFriendButton = document.getElementById("inviteGroupFriendButton");
     const leaveGroupButton = document.getElementById("leaveGroupButton");
 
-    const storageKey = "realtime-chat-messages-" + currentUser;
+    const storageKey = "realtime-chat-public-messages";
 
     let currentChannel = "general";
     let currentPrivateFriend = null;
@@ -270,6 +270,35 @@ if (currentPrivateFriend !== null) {
     }
 
     // =====================================
+    // 公共聊天：跨分頁訊息同步
+    // =====================================
+
+    window.addEventListener("storage", (event) => {
+        if (event.key !== "realtime-chat-public-messages") {
+            return;
+        }
+
+        try {
+            const updatedMessages = JSON.parse(
+                event.newValue || "{}"
+            );
+
+            chatMessages = updatedMessages;
+
+            // 只更新公共頻道，不影響私訊與群組
+            if (
+                currentGroupId === null &&
+                currentPrivateFriend === null
+            ) {
+                renderMessages();
+            }
+        } catch (error) {
+            console.error("公共聊天同步失敗：", error);
+        }
+    });
+
+
+    // =====================================
     // 傳送訊息
     // =====================================
 
@@ -368,6 +397,52 @@ messageInput.focus();
         renderGroups();
         renderMessages();
     }
+
+    // =====================================
+    // 左側四個圖示點擊功能
+    // =====================================
+
+    const serverChannelButtons =
+        document.querySelectorAll(
+            ".server-icon[data-target-channel]"
+        );
+
+    serverChannelButtons.forEach(button => {
+        button.addEventListener("click", () => {
+            const channelId =
+                button.dataset.targetChannel;
+
+            switchChannel(channelId);
+        });
+    });
+
+   
+    // =====================================
+    // 左側 + 按鈕：新增社群
+    // =====================================
+
+    const addServerButton =
+        document.getElementById("addServerButton");
+
+    if (addServerButton) {
+        addServerButton.addEventListener("click", () => {
+
+            // 使用原本的建立群組輸入框
+            if (groupNameInput) {
+                groupNameInput.scrollIntoView({
+                    behavior: "smooth",
+                    block: "center"
+                });
+
+                groupNameInput.focus();
+
+                groupNameInput.style.outline =
+                    "2px solid #5865f2";
+            }
+
+        });
+    }
+
 
     // =====================================
     // 開啟私人聊天

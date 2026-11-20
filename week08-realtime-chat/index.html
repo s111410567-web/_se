@@ -13,12 +13,34 @@
 <div class="app">
 
     <!-- 左側伺服器欄 -->
-    <aside class="server-sidebar">
-        <div class="server-icon" title="首頁">💬</div>
-        <div class="server-icon" title="程式交流">💻</div>
-        <div class="server-icon" title="遊戲社群">🎮</div>
-        <div class="server-icon" title="新增社群">+</div>
-    </aside>
+    
+<!-- 左側伺服器欄 -->
+<aside class="server-sidebar">
+    <button type="button" class="server-icon"
+            data-target-channel="general"
+            title="首頁">
+        💬
+    </button>
+
+    <button type="button" class="server-icon"
+            data-target-channel="programming"
+            title="程式交流">
+        💻
+    </button>
+
+    <button type="button" class="server-icon"
+            data-target-channel="gaming"
+            title="遊戲社群">
+        🎮
+    </button>
+
+    <button type="button" class="server-icon"
+            id="addServerButton"
+            title="新增社群">
+        +
+    </button>
+</aside>
+
 
     <!-- 頻道列表 -->
     <aside class="channel-sidebar">
