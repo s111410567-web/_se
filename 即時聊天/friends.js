@@ -1,82 +1,71 @@
+import { auth, db } from "./firebase.js";
 
-const FRIENDS_KEY = "chat-demo-friends";
-const USERS_KEY = "chat-demo-users";
+import {
+    collection,
+    doc,
+    getDoc,
+    query,
+    where,
+    onSnapshot,
+    runTransaction,
+    serverTimestamp
+} from "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
 
-// 讀取好友資料
-function getFriendData() {
-    try {
-        const saved = localStorage.getItem(FRIENDS_KEY);
+// 好友資料快取
+let friendshipCache = [];
+let unsubscribeListeners = [];
+let listenerGeneration = 0;
 
-        if (saved) {
-            const parsed = JSON.parse(saved);
-
-            if (parsed && typeof parsed === "object") {
-                return parsed;
-            }
-        }
-    } catch (error) {
-        console.error("讀取好友資料失敗：", error);
-    }
-
-    return {};
+// 統一帳號格式
+function normalizeUsername(username) {
+    return String(username || "").trim().toLowerCase();
 }
 
-// 儲存好友資料
-function saveFriendData(data) {
-    try {
-        localStorage.setItem(
-            FRIENDS_KEY,
-            JSON.stringify(data)
-        );
+// 確認登入身分
+async function requireUser(username) {
+    await auth.authStateReady();
 
-        return true;
-    } catch (error) {
-        console.error("儲存好友資料失敗：", error);
+    const user = auth.currentUser;
+
+    if (!user) {
+        throw new Error("請先登入");
+    }
+
+    if (user.email !== normalizeUsername(username) + "@chat.example.com") {
+        throw new Error("登入身分不符");
+    }
+
+    return user;
+}
+
+// 建立固定的好友關係 ID
+function getFriendshipId(username1, username2) {
+    return [
+        normalizeUsername(username1),
+        normalizeUsername(username2)
+    ].sort().join(":");
+}
+
+// 搜尋雲端會員
+async function searchUser(username) {
+    username = normalizeUsername(username);
+
+    if (!/^[a-z0-9_]{3,30}$/.test(username)) {
         return false;
     }
-}
 
-// 確保會員有好友資料
-function ensureFriendAccount(data, username) {
-    if (!data[username]) {
-        data[username] = {
-            friends: [],
-            requests: []
-        };
-    }
+    await auth.authStateReady();
 
-    if (!Array.isArray(data[username].friends)) {
-        data[username].friends = [];
-    }
+    const userRef = doc(db, "users", username);
+    const snapshot = await getDoc(userRef);
 
-    if (!Array.isArray(data[username].requests)) {
-        data[username].requests = [];
-    }
-
-    return data[username];
-}
-
-// 搜尋會員是否存在
-function searchUser(username) {
-    try {
-        const users = JSON.parse(
-            localStorage.getItem(USERS_KEY) || "{}"
-        );
-
-        return Object.prototype.hasOwnProperty.call(
-            users,
-            username
-        );
-    } catch (error) {
-        console.error("搜尋會員失敗：", error);
-        return false;
-    }
+    return snapshot.exists();
 }
 
 // 發送好友邀請
-function sendFriendRequest(sender, receiver) {
-    sender = sender.trim();
-    receiver = receiver.trim();
+async function sendFriendRequest(sender, receiver) {
+    sender = normalizeUsername(sender);
+    receiver = normalizeUsername(receiver);
 
     if (!receiver) {
         return "請輸入會員帳號";
@@ -86,125 +75,325 @@ function sendFriendRequest(sender, receiver) {
         return "不能加自己為好友";
     }
 
-    if (!searchUser(receiver)) {
+    if (!/^[a-z0-9_]{3,30}$/.test(receiver)) {
         return "找不到這個會員";
     }
 
-    const data = getFriendData();
+    const currentUser = await requireUser(sender);
 
-    const senderData = ensureFriendAccount(data, sender);
-    const receiverData = ensureFriendAccount(data, receiver);
+    const receiverRef = doc(db, "users", receiver);
+    const receiverSnapshot = await getDoc(receiverRef);
 
-    if (senderData.friends.includes(receiver)) {
-        return "你們已經是好友";
+    if (!receiverSnapshot.exists()) {
+        return "找不到這個會員";
     }
 
-    if (receiverData.requests.includes(sender)) {
-        return "已經發送過好友邀請";
-    }
+    const receiverUid = receiverSnapshot.data().uid;
 
-    if (senderData.requests.includes(receiver)) {
-        return "對方已經邀請你，請先處理邀請";
-    }
+    const friendshipId = getFriendshipId(
+        sender,
+        receiver
+    );
 
-    receiverData.requests.push(sender);
+    const friendshipRef = doc(
+        db,
+        "friendships",
+        friendshipId
+    );
 
-    if (!saveFriendData(data)) {
-        return "好友邀請儲存失敗";
-    }
+    const notificationRef = doc(
+        collection(
+            db,
+            "users",
+            receiver,
+            "notifications"
+        )
+    );
 
-    return "好友邀請已送出";
+    return await runTransaction(db, async transaction => {
+        const snapshot = await transaction.get(friendshipRef);
+
+        if (snapshot.exists()) {
+            const data = snapshot.data();
+
+            if (data.status === "accepted") {
+                return "你們已經是好友";
+            }
+
+            if (data.sender === sender) {
+                return "已經發送過好友邀請";
+            }
+
+            return "對方已經邀請你，請先處理邀請";
+        }
+
+        // 建立好友邀請
+        transaction.set(friendshipRef, {
+            sender: sender,
+            receiver: receiver,
+            senderUid: currentUser.uid,
+            receiverUid: receiverUid,
+            status: "pending"
+        });
+
+        // 同時建立雲端通知
+        transaction.set(notificationRef, {
+            type: "friend_request",
+            message: "👤 " + sender + " 向你發送好友邀請",
+            sender: sender,
+            senderUid: currentUser.uid,
+            receiverUid: receiverUid,
+            sourceId: friendshipId,
+            read: false,
+            createdAt: serverTimestamp()
+        });
+
+        return "好友邀請已送出";
+    });
 }
 
 // 接受好友邀請
-function acceptFriendRequest(username, sender) {
-    const data = getFriendData();
+async function acceptFriendRequest(username, sender) {
+    username = normalizeUsername(username);
+    sender = normalizeUsername(sender);
 
-    const userData = ensureFriendAccount(data, username);
-    const senderData = ensureFriendAccount(data, sender);
+    const user = await requireUser(username);
 
-    if (!userData.requests.includes(sender)) {
-        return "找不到好友邀請";
-    }
-
-    userData.requests = userData.requests.filter(
-        name => name !== sender
+    const friendshipRef = doc(
+        db,
+        "friendships",
+        getFriendshipId(username, sender)
     );
 
-    if (!userData.friends.includes(sender)) {
-        userData.friends.push(sender);
-    }
+    return await runTransaction(db, async transaction => {
+        const snapshot = await transaction.get(friendshipRef);
 
-    if (!senderData.friends.includes(username)) {
-        senderData.friends.push(username);
-    }
+        if (!snapshot.exists()) {
+            return "找不到好友邀請";
+        }
 
-    if (!saveFriendData(data)) {
-        return "好友資料儲存失敗";
-    }
+        const data = snapshot.data();
 
-    return "已接受好友邀請";
+        if (
+            data.receiverUid !== user.uid ||
+            data.status !== "pending"
+        ) {
+            return "找不到好友邀請";
+        }
+
+        transaction.update(friendshipRef, {
+            status: "accepted"
+        });
+
+        return "已接受好友邀請";
+    });
 }
 
 // 拒絕好友邀請
-function rejectFriendRequest(username, sender) {
-    const data = getFriendData();
+async function rejectFriendRequest(username, sender) {
+    username = normalizeUsername(username);
+    sender = normalizeUsername(sender);
 
-    const userData = ensureFriendAccount(data, username);
+    const user = await requireUser(username);
 
-    if (!userData.requests.includes(sender)) {
-        return "找不到好友邀請";
-    }
-
-    userData.requests = userData.requests.filter(
-        name => name !== sender
+    const friendshipRef = doc(
+        db,
+        "friendships",
+        getFriendshipId(username, sender)
     );
 
-    if (!saveFriendData(data)) {
-        return "好友資料儲存失敗";
-    }
+    return await runTransaction(db, async transaction => {
+        const snapshot = await transaction.get(friendshipRef);
 
-    return "已拒絕好友邀請";
+        if (!snapshot.exists()) {
+            return "找不到好友邀請";
+        }
+
+        const data = snapshot.data();
+
+        if (
+            data.receiverUid !== user.uid ||
+            data.status !== "pending"
+        ) {
+            return "找不到好友邀請";
+        }
+
+        transaction.delete(friendshipRef);
+
+        return "已拒絕好友邀請";
+    });
 }
 
 // 取得好友列表
 function getFriends(username) {
-    const data = getFriendData();
-    const userData = ensureFriendAccount(data, username);
+    username = normalizeUsername(username);
 
-    return [...userData.friends];
+    return friendshipCache
+        .filter(item =>
+            item.status === "accepted" &&
+            (
+                item.sender === username ||
+                item.receiver === username
+            )
+        )
+        .map(item =>
+            item.sender === username
+                ? item.receiver
+                : item.sender
+        );
 }
 
 // 取得收到的好友邀請
 function getFriendRequests(username) {
-    const data = getFriendData();
-    const userData = ensureFriendAccount(data, username);
+    username = normalizeUsername(username);
 
-    return [...userData.requests];
+    return friendshipCache
+        .filter(item =>
+            item.receiver === username &&
+            item.status === "pending"
+        )
+        .map(item => item.sender);
 }
 
 // 刪除好友
-function removeFriend(username, friendName) {
-    const data = getFriendData();
+async function removeFriend(username, friendName) {
+    username = normalizeUsername(username);
+    friendName = normalizeUsername(friendName);
 
-    const userData = ensureFriendAccount(data, username);
-    const friendData = ensureFriendAccount(data, friendName);
+    const user = await requireUser(username);
 
-    if (!userData.friends.includes(friendName)) {
-        return "對方不是你的好友";
-    }
-
-    userData.friends = userData.friends.filter(
-        name => name !== friendName
+    const friendshipRef = doc(
+        db,
+        "friendships",
+        getFriendshipId(username, friendName)
     );
 
-    friendData.friends = friendData.friends.filter(
-        name => name !== username
-    );
+    return await runTransaction(db, async transaction => {
+        const snapshot = await transaction.get(friendshipRef);
 
-    if (!saveFriendData(data)) {
-        return "刪除好友失敗";
-    }
+        if (!snapshot.exists()) {
+            return "對方不是你的好友";
+        }
 
-    return "已刪除好友";
+        const data = snapshot.data();
+
+        if (
+            data.status !== "accepted" ||
+            (
+                data.senderUid !== user.uid &&
+                data.receiverUid !== user.uid
+            )
+        ) {
+            return "對方不是你的好友";
+        }
+
+        transaction.delete(friendshipRef);
+
+        return "已刪除好友";
+    });
 }
+
+// 停止雲端監聽
+function stopFriendshipListener() {
+    listenerGeneration++;
+
+    unsubscribeListeners.forEach(unsubscribe => {
+        unsubscribe();
+    });
+
+    unsubscribeListeners = [];
+    friendshipCache = [];
+}
+
+// 即時監聽雲端好友資料
+async function startFriendshipListener(
+    username,
+    onChange,
+    onError = console.error
+) {
+    stopFriendshipListener();
+
+    const generation = listenerGeneration;
+    const user = await requireUser(username);
+
+    if (generation !== listenerGeneration) {
+        return;
+    }
+
+    const friendshipsRef = collection(db, "friendships");
+
+    const sentQuery = query(
+        friendshipsRef,
+        where("senderUid", "==", user.uid)
+    );
+
+    const receivedQuery = query(
+        friendshipsRef,
+        where("receiverUid", "==", user.uid)
+    );
+
+    let sentData = [];
+    let receivedData = [];
+
+    function refreshCache() {
+        if (generation !== listenerGeneration) {
+            return;
+        }
+
+        const merged = new Map();
+
+        [...sentData, ...receivedData].forEach(item => {
+            merged.set(item.id, item);
+        });
+
+        friendshipCache = [...merged.values()];
+
+        if (typeof onChange === "function") {
+            onChange();
+        }
+    }
+
+    const unsubscribeSent = onSnapshot(
+        sentQuery,
+        snapshot => {
+            sentData = snapshot.docs.map(item => ({
+                ...item.data(),
+                id: item.id
+            }));
+
+            refreshCache();
+        },
+        onError
+    );
+
+    const unsubscribeReceived = onSnapshot(
+        receivedQuery,
+        snapshot => {
+            receivedData = snapshot.docs.map(item => ({
+                ...item.data(),
+                id: item.id
+            }));
+
+            refreshCache();
+        },
+        onError
+    );
+
+    unsubscribeListeners = [
+        unsubscribeSent,
+        unsubscribeReceived
+    ];
+}
+
+// 匯出功能
+export {
+    searchUser,
+    sendFriendRequest,
+    acceptFriendRequest,
+    rejectFriendRequest,
+    getFriends,
+    getFriendRequests,
+    removeFriend,
+    startFriendshipListener,
+    stopFriendshipListener
+};

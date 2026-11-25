@@ -1,5 +1,11 @@
 
-import { auth } from "./firebase.js";
+import { auth, db } from "./firebase.js";
+
+import {
+    doc,
+    getDoc,
+    setDoc
+} from "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
 
 import {
     createUserWithEmailAndPassword,
@@ -18,6 +24,21 @@ const showRegister = document.getElementById("showRegister");
 const showLogin = document.getElementById("showLogin");
 
 const SESSION_KEY = "chat-demo-session";
+// 建立 Firestore 雲端會員索引
+async function ensureCloudUser(user, username) {
+    const userRef = doc(db, "users", username);
+
+    const userSnapshot = await getDoc(userRef);
+
+    if (!userSnapshot.exists()) {
+        await setDoc(userRef, {
+            uid: user.uid,
+            username: username
+        });
+    } else if (userSnapshot.data().uid !== user.uid) {
+        throw new Error("會員索引與登入帳號不一致");
+    }
+}
 
 // 將帳號名稱轉換成內部電子郵件格式
 function usernameToEmail(username) {
@@ -182,6 +203,8 @@ loginForm.addEventListener("submit", async (event) => {
                 usernameToEmail(username),
                 password
             );
+
+await ensureCloudUser(credential.user, username);
 
         sessionStorage.setItem(
             SESSION_KEY,

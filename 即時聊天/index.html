@@ -240,16 +240,7 @@
 </div>
 
 
-        <div class="channel-title">私人訊息</div>
-
-        <div class="channel" data-channel="friend1">
-            👤 小明
-        </div>
-
-        <div class="channel" data-channel="friend2">
-            👤 小華
-        </div>
-
+        
         <!-- 使用者資訊 -->
         <div class="user-panel">
             <div class="avatar">我</div>
@@ -263,46 +254,15 @@
     </aside>
 
     <!-- 中間聊天區 -->
-    <main class="chat-container">
+<main class="chat-container">
 
-        <header class="chat-header" id="chatTitle">
-            # 一般聊天
-        </header>
+    <header class="chat-header" id="chatTitle">
+        # 一般聊天
+    </header>
 
-        <section class="messages" id="messages">
-
-            <div class="message">
-                <div class="avatar">小</div>
-
-                <div class="message-content">
-                    <div class="message-author">
-                        小明
-                        <span class="message-time">09:30</span>
-                    </div>
-
-                    <div class="message-text">
-                        大家早安！歡迎來到聊天平台。
-                    </div>
-                </div>
-            </div>
-
-            <div class="message">
-                <div class="avatar">華</div>
-
-                <div class="message-content">
-                    <div class="message-author">
-                        小華
-                        <span class="message-time">09:35</span>
-                    </div>
-
-                    <div class="message-text">
-                        今天有人想一起討論程式設計嗎？
-                    </div>
-                </div>
-            </div>
-
-        </section>
-
+    <section class="messages" id="messages">
+    </section>
+    
         <!-- 訊息輸入區 -->
         <form class="message-input-area" id="messageForm">
             <input
@@ -320,39 +280,25 @@
 
     </main>
 
-    <!-- 右側成員列表 -->
-    <aside class="member-sidebar">
-        <div class="member-title">
-            線上成員 — 3
-        </div>
+    <!-- 右側平台資訊 -->
+<aside class="member-sidebar">
 
-        <div class="member">
-            <div class="avatar">我</div>
-            <span>測試使用者</span>
-            <div class="online-dot"></div>
-        </div>
+    <div class="member-title">
+        平台資訊
+    </div>
 
-        <div class="member">
-            <div class="avatar">小</div>
-            <span>小明</span>
-            <div class="online-dot"></div>
-        </div>
+    <div style="padding: 12px; font-size: 13px; color: #949ba4;">
+        <p>☁️ Firebase 雲端聊天平台</p>
+        <p>支援即時訊息同步</p>
+        <p>支援私人與群組聊天</p>
+        <p>支援跨裝置使用</p>
+    </div>
 
-        <div class="member">
-            <div class="avatar">華</div>
-            <span>小華</span>
-            <div class="online-dot"></div>
-        </div>
-    </aside>
+</aside>
 
 </div>
 
-<script src="friends.js"></script>
-<script src="private-chat.js"></script>
-<script src="groups.js"></script>
-<script src="read-status.js"></script>
-<script src="notifications.js"></script>
-<script src="script.js"></script>
+<script type="module" src="script.js"></script>
 
 </body>
 </html>

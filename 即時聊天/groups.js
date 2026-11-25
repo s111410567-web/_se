@@ -1,55 +1,118 @@
-
 /* =========================================
    群組聊天資料管理
-   groups.js
-   本機展示版本
+   Firebase 雲端即時同步版本
 ========================================= */
 
-const GROUPS_KEY = "chat-demo-groups";
+import { auth, db } from "./firebase.js";
+import { getFriends } from "./friends.js";
 
-// 讀取所有群組
-function getAllGroups() {
-    try {
-        const saved = localStorage.getItem(GROUPS_KEY);
+import {
+    collection,
+    doc,
+    getDoc,
+    addDoc,
+    query,
+    where,
+    orderBy,
+    onSnapshot,
+    runTransaction,
+    serverTimestamp
+} from "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
 
-        if (!saved) {
-            return {};
-        }
+let groupCache = new Map();
+let groupMessageCache = new Map();
 
-        const parsed = JSON.parse(saved);
+let unsubscribeGroups = null;
+let unsubscribeGroupMessages = null;
 
-        if (
-            parsed &&
-            typeof parsed === "object" &&
-            !Array.isArray(parsed)
-        ) {
-            return parsed;
-        }
-    } catch (error) {
-        console.error("讀取群組失敗：", error);
+let groupGeneration = 0;
+let messageGeneration = 0;
+
+// 確認登入身分
+async function requireUser(username) {
+    await auth.authStateReady();
+
+    const user = auth.currentUser;
+
+    if (!user) {
+        throw new Error("請先登入");
     }
 
-    return {};
+    if (user.email !== username + "@chat.example.com") {
+        throw new Error("登入身分不符");
+    }
+
+    return user;
 }
 
-// 儲存群組
-function saveGroups(groups) {
-    try {
-        localStorage.setItem(
-            GROUPS_KEY,
-            JSON.stringify(groups)
-        );
+// 停止群組列表監聽
+function stopGroupListener() {
+    groupGeneration++;
 
-        return true;
-    } catch (error) {
-        console.error("儲存群組失敗：", error);
-        return false;
+    if (unsubscribeGroups) {
+        unsubscribeGroups();
+        unsubscribeGroups = null;
     }
+
+    groupCache.clear();
+}
+
+// 啟動群組列表即時監聽
+async function startGroupListener(
+    username,
+    onChange,
+    onError = console.error
+) {
+    stopGroupListener();
+
+    const generation = groupGeneration;
+    const user = await requireUser(username);
+
+    if (generation !== groupGeneration) {
+        return;
+    }
+
+    const groupsQuery = query(
+        collection(db, "groups"),
+        where("memberUids", "array-contains", user.uid),
+        where("active", "==", true)
+    );
+
+    unsubscribeGroups = onSnapshot(
+        groupsQuery,
+
+        snapshot => {
+            if (generation !== groupGeneration) {
+                return;
+            }
+
+            groupCache.clear();
+
+            snapshot.docs.forEach(groupDoc => {
+                groupCache.set(groupDoc.id, {
+                    ...groupDoc.data(),
+                    id: groupDoc.id
+                });
+            });
+
+            onChange?.();
+        },
+
+        error => {
+            if (generation !== groupGeneration) {
+                return;
+            }
+
+            groupCache.clear();
+            onChange?.();
+            onError(error);
+        }
+    );
 }
 
 // 建立群組
-function createGroup(owner, groupName) {
-    const name = groupName.trim();
+async function createGroup(owner, groupName) {
+    const name = String(groupName).trim();
 
     if (!name) {
         return {
@@ -65,117 +128,280 @@ function createGroup(owner, groupName) {
         };
     }
 
-    const groups = getAllGroups();
+    try {
+        const user = await requireUser(owner);
 
-    const groupId =
-        "group-" +
-        Date.now() +
-        "-" +
-        Math.random().toString(36).slice(2, 8);
+        const groupRef = await addDoc(
+            collection(db, "groups"),
+            {
+                name: name,
+                owner: owner,
+                ownerUid: user.uid,
+                members: [owner],
+                memberUids: [user.uid],
+                active: true,
+                createdAt: serverTimestamp()
+            }
+        );
 
-    groups[groupId] = {
-        id: groupId,
-        name: name,
-        owner: owner,
-        members: [owner],
-        messages: [],
-        createdAt: Date.now()
-    };
+        return {
+            success: true,
+            message: "群組建立成功",
+            groupId: groupRef.id
+        };
 
-    if (!saveGroups(groups)) {
+    } catch (error) {
+        console.error("建立群組失敗：", error);
+
         return {
             success: false,
             message: "建立群組失敗"
         };
     }
-
-    return {
-        success: true,
-        message: "群組建立成功",
-        groupId: groupId
-    };
 }
 
-// 取得指定會員加入的群組
+// 取得會員加入的群組
 function getUserGroups(username) {
-    const groups = getAllGroups();
-
-    return Object.values(groups).filter(group => {
-        return (
-            Array.isArray(group.members) &&
+    return [...groupCache.values()].filter(
+        group =>
+            group.active &&
             group.members.includes(username)
-        );
-    });
+    );
 }
 
 // 取得指定群組
 function getGroup(groupId) {
-    const groups = getAllGroups();
-
-    return groups[groupId] || null;
+    return groupCache.get(groupId) || null;
 }
 
 // 邀請好友加入群組
-function inviteFriendToGroup(groupId, inviter, friend) {
-    const groups = getAllGroups();
-    const group = groups[groupId];
+async function inviteFriendToGroup(
+    groupId,
+    inviter,
+    friend
+) {
+    try {
+        const user = await requireUser(inviter);
 
-    if (!group) {
-        return "找不到群組";
-    }
+        if (!getFriends(inviter).includes(friend)) {
+            return "只能邀請自己的好友";
+        }
 
-    if (!group.members.includes(inviter)) {
-        return "你不是群組成員";
-    }
+        const friendSnapshot = await getDoc(
+            doc(db, "users", friend)
+        );
 
-    if (!getFriends(inviter).includes(friend)) {
-        return "只能邀請自己的好友";
-    }
+        if (!friendSnapshot.exists()) {
+            return "找不到好友";
+        }
 
-    if (group.members.includes(friend)) {
-        return "對方已經在群組中";
-    }
+        const friendUid = friendSnapshot.data().uid;
 
-    // 本機示範：直接加入，不經過邀請確認
-    group.members.push(friend);
+        const groupRef = doc(db, "groups", groupId);
 
-    if (!saveGroups(groups)) {
+        const notificationRef = doc(
+            collection(
+                db,
+                "users",
+                friend,
+                "notifications"
+            )
+        );
+
+        return await runTransaction(
+            db,
+            async transaction => {
+                const snapshot =
+                    await transaction.get(groupRef);
+
+                if (!snapshot.exists()) {
+                    return "找不到群組";
+                }
+
+                const group = snapshot.data();
+
+                if (!group.active) {
+                    return "群組已解散";
+                }
+
+                if (!group.memberUids.includes(user.uid)) {
+                    return "你不是群組成員";
+                }
+
+                if (group.memberUids.includes(friendUid)) {
+                    return "對方已經在群組中";
+                }
+
+                if (group.members.length >= 30) {
+                    return "群組成員已達上限";
+                }
+
+                // 更新群組成員
+                transaction.update(groupRef, {
+                    members: [...group.members, friend],
+                    memberUids: [
+                        ...group.memberUids,
+                        friendUid
+                    ]
+                });
+
+                // 同時建立雲端通知
+                transaction.set(notificationRef, {
+                    type: "group_invite",
+
+                    message:
+                        "👥 " + inviter +
+                        " 邀請你加入群組「" +
+                        group.name + "」",
+
+                    sender: inviter,
+                    senderUid: user.uid,
+                    receiverUid: friendUid,
+                    sourceId: groupId,
+                    read: false,
+                    createdAt: serverTimestamp()
+                });
+
+                return "已將好友加入群組";
+            }
+        );
+
+    } catch (error) {
+        console.error("邀請好友失敗：", error);
         return "邀請失敗";
     }
+}
 
-    return "已將好友加入群組";
+// 停止群組訊息監聽
+function stopGroupMessageListener() {
+    messageGeneration++;
+
+    if (unsubscribeGroupMessages) {
+        unsubscribeGroupMessages();
+        unsubscribeGroupMessages = null;
+    }
+
+    groupMessageCache.clear();
+}
+
+// 啟動群組訊息即時監聽
+async function startGroupMessageListener(
+    groupId,
+    username,
+    onChange,
+    onError = console.error
+) {
+    stopGroupMessageListener();
+
+    const generation = messageGeneration;
+
+    await requireUser(username);
+
+    if (generation !== messageGeneration) {
+        return;
+    }
+
+    const messagesQuery = query(
+        collection(
+            db,
+            "groups",
+            groupId,
+            "messages"
+        ),
+        orderBy("createdAt", "asc")
+    );
+
+    unsubscribeGroupMessages = onSnapshot(
+        messagesQuery,
+
+        snapshot => {
+            if (generation !== messageGeneration) {
+                return;
+            }
+
+            const messages = snapshot.docs.map(
+                messageDoc => {
+                    const data = messageDoc.data();
+
+                    const timestamp =
+                        data.createdAt?.toMillis()
+                        ?? data.timestamp
+                        ?? Date.now();
+
+                    return {
+                        id: messageDoc.id,
+                        author: data.author,
+                        text: data.text,
+
+                        time: new Date(timestamp)
+                            .toLocaleTimeString("zh-TW", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                hour12: false
+                            }),
+
+                        timestamp: timestamp
+                    };
+                }
+            );
+
+            groupMessageCache.set(
+                groupId,
+                messages
+            );
+
+            onChange?.();
+        },
+
+        error => {
+            if (generation !== messageGeneration) {
+                return;
+            }
+
+            groupMessageCache.delete(groupId);
+            onChange?.();
+            onError(error);
+        }
+    );
 }
 
 // 傳送群組訊息
-function sendGroupMessage(groupId, sender, text) {
-    const messageText = text.trim();
-    const groups = getAllGroups();
-    const group = groups[groupId];
+async function sendGroupMessage(
+    groupId,
+    sender,
+    text
+) {
+    const messageText = String(text).trim();
 
-    if (!group || !messageText) {
+    if (!messageText || messageText.length > 2000) {
         return false;
     }
 
-    if (!group.members.includes(sender)) {
+    try {
+        const user = await requireUser(sender);
+
+        await addDoc(
+            collection(
+                db,
+                "groups",
+                groupId,
+                "messages"
+            ),
+            {
+                author: sender,
+                senderUid: user.uid,
+                text: messageText,
+                timestamp: Date.now(),
+                createdAt: serverTimestamp()
+            }
+        );
+
+        return true;
+
+    } catch (error) {
+        console.error("群組訊息傳送失敗：", error);
         return false;
     }
-
-    if (!Array.isArray(group.messages)) {
-        group.messages = [];
-    }
-
-    group.messages.push({
-        author: sender,
-        text: messageText,
-        time: new Date().toLocaleTimeString("zh-TW", {
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: false
-        }),
-        timestamp: Date.now()
-    });
-
-    return saveGroups(groups);
 }
 
 // 取得群組訊息
@@ -186,57 +412,115 @@ function getGroupMessages(groupId, username) {
         return [];
     }
 
-    return Array.isArray(group.messages)
-        ? [...group.messages]
-        : [];
+    return [
+        ...(groupMessageCache.get(groupId) || [])
+    ];
 }
 
 // 離開群組
-function leaveGroup(groupId, username) {
-    const groups = getAllGroups();
-    const group = groups[groupId];
+async function leaveGroup(groupId, username) {
+    try {
+        const user = await requireUser(username);
 
-    if (!group) {
-        return "找不到群組";
-    }
+        const groupRef = doc(db, "groups", groupId);
 
-    if (!group.members.includes(username)) {
-        return "你不是群組成員";
-    }
+        return await runTransaction(
+            db,
+            async transaction => {
+                const snapshot =
+                    await transaction.get(groupRef);
 
-    if (group.owner === username) {
-        return "群組建立者不能直接離開，請先解散群組";
-    }
+                if (!snapshot.exists()) {
+                    return "找不到群組";
+                }
 
-    group.members = group.members.filter(
-        member => member !== username
-    );
+                const group = snapshot.data();
 
-    if (!saveGroups(groups)) {
+                if (!group.active) {
+                    return "群組已解散";
+                }
+
+                if (!group.memberUids.includes(user.uid)) {
+                    return "你不是群組成員";
+                }
+
+                if (group.ownerUid === user.uid) {
+                    return "群組建立者不能直接離開，請先解散群組";
+                }
+
+                transaction.update(groupRef, {
+                    members: group.members.filter(
+                        member => member !== username
+                    ),
+
+                    memberUids: group.memberUids.filter(
+                        uid => uid !== user.uid
+                    )
+                });
+
+                return "已離開群組";
+            }
+        );
+
+    } catch (error) {
+        console.error("離開群組失敗：", error);
         return "離開群組失敗";
     }
-
-    return "已離開群組";
 }
 
 // 解散群組
-function deleteGroup(groupId, username) {
-    const groups = getAllGroups();
-    const group = groups[groupId];
+async function deleteGroup(groupId, username) {
+    try {
+        const user = await requireUser(username);
 
-    if (!group) {
-        return "找不到群組";
-    }
+        const groupRef = doc(db, "groups", groupId);
 
-    if (group.owner !== username) {
-        return "只有群組建立者可以解散群組";
-    }
+        return await runTransaction(
+            db,
+            async transaction => {
+                const snapshot =
+                    await transaction.get(groupRef);
 
-    delete groups[groupId];
+                if (!snapshot.exists()) {
+                    return "找不到群組";
+                }
 
-    if (!saveGroups(groups)) {
+                const group = snapshot.data();
+
+                if (group.ownerUid !== user.uid) {
+                    return "只有群組建立者可以解散群組";
+                }
+
+                if (!group.active) {
+                    return "群組已解散";
+                }
+
+                transaction.update(groupRef, {
+                    active: false
+                });
+
+                return "群組已解散";
+            }
+        );
+
+    } catch (error) {
+        console.error("解散群組失敗：", error);
         return "解散群組失敗";
     }
-
-    return "群組已解散";
 }
+
+// 匯出群組功能
+export {
+    createGroup,
+    getUserGroups,
+    getGroup,
+    inviteFriendToGroup,
+    sendGroupMessage,
+    getGroupMessages,
+    leaveGroup,
+    deleteGroup,
+    startGroupListener,
+    stopGroupListener,
+    startGroupMessageListener,
+    stopGroupMessageListener
+};
