@@ -1,4 +1,15 @@
 
+import { auth } from "./firebase.js";
+
+import {
+    createUserWithEmailAndPassword,
+    signInWithEmailAndPassword,
+    updateProfile,
+    setPersistence,
+    browserSessionPersistence,
+    signOut
+} from "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js";
+
 const loginForm = document.getElementById("loginForm");
 const registerForm = document.getElementById("registerForm");
 const authMessage = document.getElementById("authMessage");
@@ -6,22 +17,49 @@ const authMessage = document.getElementById("authMessage");
 const showRegister = document.getElementById("showRegister");
 const showLogin = document.getElementById("showLogin");
 
-const USERS_KEY = "chat-demo-users";
 const SESSION_KEY = "chat-demo-session";
 
-// 讀取示範帳號
-function getUsers() {
-    try {
-        return JSON.parse(localStorage.getItem(USERS_KEY)) || {};
-    } catch {
-        return {};
-    }
+// 將帳號名稱轉換成內部電子郵件格式
+function usernameToEmail(username) {
+    return username.toLowerCase() + "@chat.example.com";
 }
 
-// 顯示訊息
+// 顯示提示訊息
 function showMessage(message, success = false) {
     authMessage.textContent = message;
-    authMessage.style.color = success ? "#43d98a" : "#ff7777";
+    authMessage.style.color = success
+        ? "#43d98a"
+        : "#ff7777";
+}
+
+// 驗證帳號格式
+function isValidUsername(username) {
+    return /^[a-zA-Z0-9_]{3,30}$/.test(username);
+}
+
+// Firebase 錯誤訊息
+function getErrorMessage(error) {
+    switch (error.code) {
+        case "auth/email-already-in-use":
+            return "帳號已經存在";
+
+        case "auth/invalid-credential":
+        case "auth/user-not-found":
+        case "auth/wrong-password":
+            return "帳號或密碼錯誤";
+
+        case "auth/weak-password":
+            return "密碼強度不足";
+
+        case "auth/network-request-failed":
+            return "網路連線失敗，請稍後再試";
+
+        case "auth/too-many-requests":
+            return "操作次數過多，請稍後再試";
+
+        default:
+            return "操作失敗：" + error.code;
+    }
 }
 
 // 切換到註冊畫面
@@ -44,13 +82,13 @@ showLogin.addEventListener("click", (event) => {
     showMessage("");
 });
 
-// 註冊示範帳號
-registerForm.addEventListener("submit", (event) => {
+// Firebase 雲端會員註冊
+registerForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
     const username = document
         .getElementById("registerUsername")
-        .value.trim();
+        .value.trim().toLowerCase();
 
     const password = document
         .getElementById("registerPassword")
@@ -65,6 +103,11 @@ registerForm.addEventListener("submit", (event) => {
         return;
     }
 
+    if (!isValidUsername(username)) {
+        showMessage("帳號須為3至30個英文字母、數字或底線");
+        return;
+    }
+
     if (password.length < 8) {
         showMessage("密碼至少需要 8 個字元");
         return;
@@ -75,55 +118,85 @@ registerForm.addEventListener("submit", (event) => {
         return;
     }
 
-    const users = getUsers();
-
-    if (Object.prototype.hasOwnProperty.call(users, username)) {
-        showMessage("帳號已經存在");
-        return;
-    }
-
-    // 僅供本機課堂示範，不能用於正式會員系統
-    users[username] = { password };
-
     try {
-        localStorage.setItem(USERS_KEY, JSON.stringify(users));
-    } catch {
-        showMessage("無法儲存帳號，請檢查瀏覽器設定");
-        return;
+        showMessage("正在建立雲端帳號...", true);
+
+        await setPersistence(
+            auth,
+            browserSessionPersistence
+        );
+
+        const credential =
+            await createUserWithEmailAndPassword(
+                auth,
+                usernameToEmail(username),
+                password
+            );
+
+        await updateProfile(credential.user, {
+            displayName: username
+        });
+
+        await signOut(auth);
+
+        registerForm.reset();
+        registerForm.classList.add("hidden");
+        loginForm.classList.remove("hidden");
+
+        showMessage("雲端帳號註冊成功！請登入", true);
+
+    } catch (error) {
+        console.error(error);
+        showMessage(getErrorMessage(error));
     }
-
-    registerForm.reset();
-    registerForm.classList.add("hidden");
-    loginForm.classList.remove("hidden");
-
-    showMessage("註冊成功！請登入", true);
 });
 
-// 登入示範帳號
-loginForm.addEventListener("submit", (event) => {
+// Firebase 雲端會員登入
+loginForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
     const username = document
         .getElementById("loginUsername")
-        .value.trim();
+        .value.trim().toLowerCase();
 
     const password = document
         .getElementById("loginPassword")
         .value;
 
-    const users = getUsers();
-
-    if (!users[username] || users[username].password !== password) {
-        showMessage("帳號或密碼錯誤");
+    if (!isValidUsername(username) || !password) {
+        showMessage("請輸入正確的帳號與密碼");
         return;
     }
 
     try {
-        sessionStorage.setItem(SESSION_KEY, username);
-    } catch {
-        showMessage("無法建立登入狀態");
-        return;
-    }
+        showMessage("正在登入雲端帳號...", true);
 
-    window.location.href = "index.html";
+        await setPersistence(
+            auth,
+            browserSessionPersistence
+        );
+
+        const credential =
+            await signInWithEmailAndPassword(
+                auth,
+                usernameToEmail(username),
+                password
+            );
+
+        sessionStorage.setItem(
+            SESSION_KEY,
+            username
+        );
+
+        sessionStorage.setItem(
+            "chat-firebase-uid",
+            credential.user.uid
+        );
+
+        window.location.href = "index.html";
+
+    } catch (error) {
+        console.error(error);
+        showMessage(getErrorMessage(error));
+    }
 });
